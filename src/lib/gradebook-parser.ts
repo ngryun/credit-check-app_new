@@ -153,7 +153,7 @@ export async function parseGradebookFilesAsync(
     const wb = await loadWorkbookFromBufferOrText(f.buffer, f.name)
     const { classInfo, rows } = readRowsFromWorkbook(wb)
     const cleaned = cleanGradebook(rows, classInfo)
-    if (cleaned?.rows) combined.push(...cleaned.rows)
+    if (cleaned?.rows) combined.push(...cleaned.rows.map(r => ({ ...r, _source: 'gradebook' as const })))
   }
   return { rows: combined }
 }

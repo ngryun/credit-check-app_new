@@ -1,3 +1,5 @@
+export type RowSource = 'gradebook' | 'classlist' | 'future'
+
 export type Row = {
   학년: number | null
   반: number | null
@@ -8,6 +10,7 @@ export type Row = {
   교과: string | null
   과목명: string | null
   학점: number | null
+  _source?: RowSource
 }
 
 export type Dataset = {

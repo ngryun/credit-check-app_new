@@ -197,7 +197,7 @@ export async function parseFutureSelectionFile(
         const k = `${g}-${c}-${n}::${subName}::${o.과목학년 ?? ''}-${o.과목학기 ?? ''}`
         if (!seen.has(k)) {
           seen.add(k)
-          out.push({ 학년: g, 반: c, 번호: n, 이름: 이름 ?? null, 과목학년: o.과목학년 ?? null, 과목학기: o.과목학기 ?? null, 교과: o.교과 ?? null, 과목명: subName, 학점: o.학점 ?? null })
+          out.push({ 학년: g, 반: c, 번호: n, 이름: 이름 ?? null, 과목학년: o.과목학년 ?? null, 과목학기: o.과목학기 ?? null, 교과: o.교과 ?? null, 과목명: subName, 학점: o.학점 ?? null, _source: 'future' })
           produced++
         }
         continue
@@ -214,7 +214,7 @@ export async function parseFutureSelectionFile(
       const k = `${g}-${c}-${n}::${subName}::${o.과목학년 ?? ''}-${o.과목학기 ?? ''}`
       if (!seen.has(k)) {
         seen.add(k)
-        out.push({ 학년: g, 반: c, 번호: n, 이름: 이름 ?? null, 과목학년: o.과목학년 ?? null, 과목학기: o.과목학기 ?? null, 교과: o.교과 ?? null, 과목명: subName, 학점: o.학점 ?? null })
+        out.push({ 학년: g, 반: c, 번호: n, 이름: 이름 ?? null, 과목학년: o.과목학년 ?? null, 과목학기: o.과목학기 ?? null, 교과: o.교과 ?? null, 과목명: subName, 학점: o.학점 ?? null, _source: 'future' })
         produced++
       }
     }
@@ -236,7 +236,7 @@ export async function parseFutureSelectionFile(
       const k = `${g}-${c}-${n}::${subName}::${o.과목학년 ?? ''}-${o.과목학기 ?? ''}`
       if (seen.has(k)) continue
       seen.add(k)
-      out.push({ 학년: g, 반: c, 번호: n, 이름: 이름 ?? null, 과목학년: o.과목학년 ?? null, 과목학기: o.과목학기 ?? null, 교과: o.교과 ?? null, 과목명: subName, 학점: o.학점 ?? null })
+      out.push({ 학년: g, 반: c, 번호: n, 이름: 이름 ?? null, 과목학년: o.과목학년 ?? null, 과목학기: o.과목학기 ?? null, 교과: o.교과 ?? null, 과목명: subName, 학점: o.학점 ?? null, _source: 'future' })
       produced++
       requiredAdded++
     }

@@ -95,6 +95,7 @@ export function Step1Upload() {
 
       <FileUploadCard
         title="1. 교과학습발달상황"
+        subtitle="(과거 이수기록 확인용)"
         description="학교생활기록부 → 학생부 항목별 조회 → 교과학습발달상황 → XLS data"
         hint={<><strong>주의:</strong> xls 아닙니다. xls data 입니다. 복수 파일 업로드 가능합니다.</>}
         status={gbStatus}
@@ -105,6 +106,7 @@ export function Step1Upload() {
 
       <FileUploadCard
         title="2. 학생편성현황"
+        subtitle="(현재 이수과목 확인용)"
         description="편제 및 과목개설관리 → 수강생편성 → 학생편성현황 → 엑셀출력"
         status={clStatus}
         statusText={clText}
@@ -113,17 +115,20 @@ export function Step1Upload() {
 
       <FileUploadCard
         title="3. 교육과정 DB"
-        description="강원도교육청 교육과정DB 양식 (과목명/학점/교과/학년·학기 포함)"
+        subtitle="(미래 이수과목 확인용)"
+        description="[신 고교학점제 수강신청프로그램] - [편성표] - [엑셀다운로드] 양식"
         hint="예: 교육과정편제표_2025년입학.xlsx"
         status={curStatus}
         statusText={curText}
         accept=".xlsx,.xls"
+        optional
         onFiles={handleCurriculum}
       />
 
       <FileUploadCard
         title="4. 학생 과목선택"
-        description="고교학점제 수강신청 프로그램 → 수강신청 → 신청결과 → 템플릿 다운로드"
+        subtitle="(미래 이수과목 확인용)"
+        description="[신 고교학점제 수강신청프로그램] → [수강신청] → [신청결과] → [템플릿 다운로드]"
         hint={
           !state.curriculumCatalog
             ? <span className="text-amber-600">교육과정 DB를 먼저 업로드해야 합니다.</span>
@@ -132,6 +137,7 @@ export function Step1Upload() {
         status={futStatus}
         statusText={futText}
         accept=".xlsx,.xls"
+        optional
         onFiles={handleFuture}
       />
 

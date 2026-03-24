@@ -2,6 +2,12 @@ import { createContext, useContext, useReducer, useMemo, type ReactNode, type Di
 import type { Row, CurriculumCatalog, FutureStats, StepId } from '../types'
 import { mergeAllData, buildNameIndex, buildBaseline } from '../lib/data-merge'
 
+/* embedded data detection for standalone shared builds */
+declare global {
+  interface Window { __EMBEDDED_DATA__?: Row[] }
+}
+const embeddedRows = window.__EMBEDDED_DATA__ ?? null
+
 interface AppState {
   currentStep: StepId
   gradebookRows: Row[] | null
@@ -9,10 +15,11 @@ interface AppState {
   curriculumCatalog: CurriculumCatalog | null
   futureRows: Row[] | null
   futureStats: FutureStats | null
-  overrideRows: Row[] | null // for direct xlsx upload in step 3
+  overrideRows: Row[] | null
   selectedClass: string | null
   selectedStudent: string | null
   searchQuery: string
+  isEmbedded: boolean
 }
 
 type Action =
@@ -28,16 +35,17 @@ type Action =
   | { type: 'SET_QUERY'; value: string }
 
 const initialState: AppState = {
-  currentStep: 1,
+  currentStep: embeddedRows ? 3 : 1,
   gradebookRows: null,
   classlistRows: null,
   curriculumCatalog: null,
   futureRows: null,
   futureStats: null,
-  overrideRows: null,
+  overrideRows: embeddedRows,
   selectedClass: null,
   selectedStudent: null,
   searchQuery: '',
+  isEmbedded: !!embeddedRows,
 }
 
 function reducer(state: AppState, action: Action): AppState {

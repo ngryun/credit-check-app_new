@@ -60,7 +60,7 @@ export async function parseClasslistFile(
 
     if (이름 == null && 번호 == null && 과목명 == null) continue
 
-    outRows.push({ 학년, 반, 번호, 이름, 과목학년, 과목학기, 교과, 과목명, 학점 })
+    outRows.push({ 학년, 반, 번호, 이름, 과목학년, 과목학기, 교과, 과목명, 학점, _source: 'classlist' })
   }
   return { rows: outRows }
 }
