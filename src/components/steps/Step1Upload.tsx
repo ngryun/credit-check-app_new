@@ -9,6 +9,8 @@ import { parseFutureSelectionFile } from '../../lib/future-selection'
 
 type FileStatus = 'idle' | 'loading' | 'done' | 'error'
 
+const HELP_ARTICLE_URL = 'https://namgungyeon.tistory.com/157'
+
 export function Step1Upload() {
   const { state, dispatch, nameIndex, baseline } = useApp()
   const [gbStatus, setGbStatus] = useState<FileStatus>(state.gradebookRows ? 'done' : 'idle')
@@ -88,9 +90,33 @@ export function Step1Upload() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
-      <div className="mb-2">
-        <h2 className="text-xl font-bold text-slate-800">데이터 업로드</h2>
-        <p className="text-sm text-slate-500 mt-1">아래 파일들을 업로드하여 학생 이수과목 데이터베이스를 생성합니다.</p>
+      <div className="mb-2 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-slate-800">데이터 업로드</h2>
+          <p className="text-sm text-slate-500 mt-1">아래 파일들을 업로드하여 학생 이수과목 데이터베이스를 생성합니다.</p>
+        </div>
+
+        <div className="flex flex-col items-start gap-2 sm:items-end">
+          <a
+            href={HELP_ARTICLE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 hover:text-brand-700"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 9a3.375 3.375 0 116.75 0c0 1.875-1.5 2.625-2.625 3.375-.75.5-1.125.938-1.125 1.875m0 3h.008v.008H12v-.008z" />
+            </svg>
+            도움말 보기
+          </a>
+          <a
+            href={HELP_ARTICLE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-slate-500 underline underline-offset-2 break-all hover:text-brand-700"
+          >
+            namgungyeon.tistory.com/157
+          </a>
+        </div>
       </div>
 
       <FileUploadCard
