@@ -24,6 +24,75 @@ const SEMESTER_MAP: { col: number; year: number; term: number }[] = [
   { col: 11, year: 3, term: 2 },  // L열 → 3-2
 ]
 
+const HORIZONTAL_SHEET_KEY = '교육과정편제표(가로)'
+
+const HORIZONTAL_SEMESTER_BLOCKS: {
+  groupCol: number
+  nameCol: number
+  creditCol: number
+  year: number
+  term: number
+}[] = [
+  { groupCol: 1, nameCol: 3, creditCol: 4, year: 1, term: 1 },    // B, D, E
+  { groupCol: 6, nameCol: 8, creditCol: 9, year: 1, term: 2 },    // G, I, J
+  { groupCol: 11, nameCol: 13, creditCol: 14, year: 2, term: 1 }, // L, N, O
+  { groupCol: 16, nameCol: 18, creditCol: 19, year: 2, term: 2 }, // Q, S, T
+  { groupCol: 21, nameCol: 23, creditCol: 24, year: 3, term: 1 }, // V, X, Y
+  { groupCol: 26, nameCol: 28, creditCol: 29, year: 3, term: 2 }, // AA, AC, AD
+]
+
+type HorizontalSection = '학교지정' | '학생선택' | '공동교육과정 및 학교밖교육과정'
+
+function cleanText(value: unknown): string {
+  return value == null ? '' : String(value).replace(/\r\n?/g, '\n').replace(/\s+/g, ' ').trim()
+}
+
+function compactText(value: unknown): string {
+  return cleanText(value).replace(/\s+/g, '')
+}
+
+function normalizeGroupName(value: string): string {
+  return cleanText(value).replace(/\s*·\s*/g, '·')
+}
+
+function isSubtotalOrHeaderText(value: string): boolean {
+  const compact = compactText(value)
+  return (
+    !compact ||
+    compact === '교과군' ||
+    compact === '과목명' ||
+    compact === '학점' ||
+    compact.includes('소계') ||
+    compact.includes('합계') ||
+    compact.includes('●')
+  )
+}
+
+function parseChoiceGroupLabel(value: string): { groupName: string; choiceCount: number | null } {
+  const text = normalizeGroupName(value)
+  const choiceMatch = text.match(/택\s*(\d+)/)
+  const groupName = normalizeGroupName(text.replace(/택\s*\d+\s*(?:과목)?/g, ''))
+  return {
+    groupName: groupName || text,
+    choiceCount: choiceMatch ? Number(choiceMatch[1]) : null,
+  }
+}
+
+function findPreferredCurriculumSheetName(wb: XLSX.WorkBook): string {
+  const horizontalName = wb.SheetNames.find((name) => compactText(name).includes(HORIZONTAL_SHEET_KEY))
+  return horizontalName || wb.SheetNames[0]
+}
+
+function findRowContaining(aoa: unknown[][], needle: string): number {
+  const compactNeedle = compactText(needle)
+  return aoa.findIndex((row) => row.some((value) => compactText(value).includes(compactNeedle)))
+}
+
+function isHorizontalCurriculumFormat(sheetName: string, aoa: unknown[][]): boolean {
+  if (compactText(sheetName).includes(HORIZONTAL_SHEET_KEY)) return true
+  return findRowContaining(aoa, '● 학생선택과목') >= 0 && findRowContaining(aoa, '● 학교지정과목') >= 0
+}
+
 /* ── 메타정보 행에서 선택 제약 파싱 ── */
 function parseConstraintRow(text: string, groupName: string): SelectionGroupConstraint[] {
   // 예: "학기 별 과목수 최소선택 : 5 ~ 최대선택 : 5"
@@ -182,12 +251,104 @@ function buildCurriculumCatalogPivot(aoa: unknown[][], headerRow: number): Curri
   return { catalog: cat, constraints }
 }
 
+/* ── 새 교육과정편제표(가로) 양식 파서 ── */
+function addHorizontalSectionRows(
+  cat: CurriculumCatalog,
+  constraints: SelectionGroupConstraint[],
+  constraintKeys: Set<string>,
+  aoa: unknown[][],
+  startRow: number,
+  endRow: number,
+  section: HorizontalSection
+) {
+  const lastGroupBySemester = new Map<number, string>()
+  const upperBound = Math.min(Math.max(startRow, 0), aoa.length)
+  const lowerBound = Math.min(Math.max(endRow, 0), aoa.length)
+
+  for (let r = upperBound; r < lowerBound; r++) {
+    const row = (aoa[r] || []) as unknown[]
+    if (!row || row.every((value) => !cleanText(value))) continue
+
+    for (const block of HORIZONTAL_SEMESTER_BLOCKS) {
+      const rawGroup = cleanText(row[block.groupCol])
+      if (rawGroup && !isSubtotalOrHeaderText(rawGroup)) {
+        const parsed = section === '학생선택'
+          ? parseChoiceGroupLabel(rawGroup)
+          : { groupName: normalizeGroupName(rawGroup), choiceCount: null }
+        lastGroupBySemester.set(block.nameCol, parsed.groupName)
+
+        if (section === '학생선택' && parsed.choiceCount != null) {
+          const semester = `${block.year}-${block.term}`
+          const key = `${semester}|${parsed.groupName}`
+          if (!constraintKeys.has(key)) {
+            constraintKeys.add(key)
+            constraints.push({
+              그룹명: parsed.groupName,
+              학기: semester,
+              최소선택: parsed.choiceCount,
+              최대선택: parsed.choiceCount,
+            })
+          }
+        }
+      }
+
+      const subName = cleanText(row[block.nameCol])
+      if (!subName || isSubtotalOrHeaderText(subName)) continue
+
+      const credit = toNum(row[block.creditCol])
+      if (credit == null || credit <= 0) continue
+
+      const group = lastGroupBySemester.get(block.nameCol) || null
+      const entry: CurriculumEntry = {
+        과목명: subName,
+        교과: group,
+        학점: credit,
+        과목학년: block.year,
+        과목학기: block.term,
+        과목구분: section,
+      }
+      if (!cat[subName]) cat[subName] = []
+      cat[subName].push(entry)
+    }
+  }
+}
+
+function buildCurriculumCatalogHorizontalLayout(aoa: unknown[][]): CurriculumParseResult {
+  const cat: CurriculumCatalog = {}
+  const constraints: SelectionGroupConstraint[] = []
+  const constraintKeys = new Set<string>()
+
+  const schoolRow = findRowContaining(aoa, '● 학교지정과목')
+  const studentRow = findRowContaining(aoa, '● 학생선택과목')
+  const outsideRow = findRowContaining(aoa, '● 공동교육과정 및 학교밖교육과정')
+
+  if (schoolRow >= 0) {
+    const schoolEnd = studentRow > schoolRow ? studentRow : outsideRow > schoolRow ? outsideRow : aoa.length
+    addHorizontalSectionRows(cat, constraints, constraintKeys, aoa, schoolRow + 1, schoolEnd, '학교지정')
+  }
+
+  if (studentRow >= 0) {
+    const studentEnd = outsideRow > studentRow ? outsideRow : aoa.length
+    addHorizontalSectionRows(cat, constraints, constraintKeys, aoa, studentRow + 2, studentEnd, '학생선택')
+  }
+
+  if (outsideRow >= 0) {
+    addHorizontalSectionRows(cat, constraints, constraintKeys, aoa, outsideRow + 1, aoa.length, '공동교육과정 및 학교밖교육과정')
+  }
+
+  return { catalog: cat, constraints }
+}
+
 /* ── 메인 빌드 함수: 양식 자동 감지 ── */
 function buildCurriculumCatalog(wb: XLSX.WorkBook): CurriculumParseResult {
-  const name = wb.SheetNames[0]
+  const name = findPreferredCurriculumSheetName(wb)
   const ws = wb.Sheets[name]
   const aoa = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: null }) as unknown[][]
   if (!aoa.length) return { catalog: {}, constraints: [] }
+
+  if (isHorizontalCurriculumFormat(name, aoa)) {
+    return buildCurriculumCatalogHorizontalLayout(aoa)
+  }
 
   const headerRow = findHeaderRow(aoa)
   const header = ((aoa[headerRow] || []) as unknown[]).map(v => v == null ? '' : String(v).trim())

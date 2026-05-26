@@ -28,8 +28,6 @@ type Action =
   | { type: 'SET_CLASSLIST'; rows: Row[] }
   | { type: 'SET_CURRICULUM'; catalog: CurriculumCatalog }
   | { type: 'SET_FUTURE'; rows: Row[]; stats: FutureStats }
-  | { type: 'SET_OVERRIDE'; rows: Row[] }
-  | { type: 'CLEAR_OVERRIDE' }
   | { type: 'SET_CLASS'; value: string | null }
   | { type: 'SET_STUDENT'; value: string | null }
   | { type: 'SET_QUERY'; value: string }
@@ -55,8 +53,6 @@ function reducer(state: AppState, action: Action): AppState {
     case 'SET_CLASSLIST': return { ...state, classlistRows: action.rows }
     case 'SET_CURRICULUM': return { ...state, curriculumCatalog: action.catalog }
     case 'SET_FUTURE': return { ...state, futureRows: action.rows, futureStats: action.stats }
-    case 'SET_OVERRIDE': return { ...state, overrideRows: action.rows }
-    case 'CLEAR_OVERRIDE': return { ...state, overrideRows: null }
     case 'SET_CLASS': return { ...state, selectedClass: action.value, selectedStudent: null }
     case 'SET_STUDENT': return { ...state, selectedStudent: action.value }
     case 'SET_QUERY': return { ...state, searchQuery: action.value }

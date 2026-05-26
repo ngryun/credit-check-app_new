@@ -16,6 +16,8 @@ type CompletedCourse = {
 
 type SemCourse = CurriculumEntry & { key: string }
 
+const SIMULATION_STORAGE_PREFIX = 'credit-check-app:simulation-selection:v1'
+
 const SEMESTERS = [
   { y: 1, t: 1, label: '1-1' },
   { y: 1, t: 2, label: '1-2' },
@@ -25,15 +27,47 @@ const SEMESTERS = [
   { y: 3, t: 2, label: '3-2' },
 ]
 
+function loadStoredSelection(storageKey: string | undefined, availableKeys: Set<string>): Set<string> | null {
+  if (!storageKey) return null
+  try {
+    const raw = window.localStorage.getItem(`${SIMULATION_STORAGE_PREFIX}:${storageKey}`)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as unknown
+    const keys = Array.isArray(parsed)
+      ? parsed
+      : parsed && typeof parsed === 'object' && Array.isArray((parsed as { selectedKeys?: unknown }).selectedKeys)
+        ? (parsed as { selectedKeys: unknown[] }).selectedKeys
+        : null
+    if (!keys) return null
+    return new Set(keys.filter((key): key is string => typeof key === 'string' && availableKeys.has(key)))
+  } catch {
+    return null
+  }
+}
+
+function saveStoredSelection(storageKey: string | undefined, selected: Set<string>) {
+  if (!storageKey) return
+  try {
+    window.localStorage.setItem(
+      `${SIMULATION_STORAGE_PREFIX}:${storageKey}`,
+      JSON.stringify({ selectedKeys: Array.from(selected).sort(), updatedAt: new Date().toISOString() })
+    )
+  } catch {
+    // 저장 공간이 막혀 있거나 부족한 브라우저에서는 시뮬레이션 자체는 계속 동작하게 둔다.
+  }
+}
+
 /* ─────────── component ─────────── */
 
 export function SimulationModal({
+  storageKey,
   catalog,
   completedCourses,
   futureCourses,
   baseline,
   onClose,
 }: {
+  storageKey?: string
   catalog: CurriculumCatalog
   completedCourses: CompletedCourse[]
   futureCourses: CompletedCourse[]
@@ -85,13 +119,29 @@ export function SimulationModal({
     return map
   }, [catalog])
 
-  // Simulation state: set of selected future course keys
-  const [selected, setSelected] = useState<Set<string>>(initialFutureKeys)
+  const availableKeys = useMemo(() => {
+    const s = new Set<string>()
+    for (const courses of semesterCourses.values()) {
+      for (const c of courses) s.add(c.key)
+    }
+    return s
+  }, [semesterCourses])
 
-  // Reset selections when student changes
+  const buildInitialSelection = useCallback(() => {
+    return loadStoredSelection(storageKey, availableKeys) ?? new Set(initialFutureKeys)
+  }, [availableKeys, initialFutureKeys, storageKey])
+
+  // Simulation state: set of selected future course keys
+  const [selected, setSelected] = useState<Set<string>>(buildInitialSelection)
+
+  // Reset selections when student/catalog changes, preferring the browser-saved state.
   useEffect(() => {
-    setSelected(new Set(initialFutureKeys))
-  }, [initialFutureKeys])
+    setSelected(buildInitialSelection())
+  }, [buildInitialSelection])
+
+  useEffect(() => {
+    saveStoredSelection(storageKey, selected)
+  }, [selected, storageKey])
 
   const toggle = useCallback((key: string) => {
     setSelected(prev => {

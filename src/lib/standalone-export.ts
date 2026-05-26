@@ -16,9 +16,7 @@ export function downloadStandaloneHtml(rows: Row[]) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  const now = new Date()
-  const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
-  a.download = `이수현황_대시보드_${stamp}.html`
+  a.download = '학생 학점이수현황 및 과목선택상담자료.html'
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)

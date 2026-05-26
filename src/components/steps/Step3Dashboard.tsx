@@ -1,14 +1,12 @@
-import { useMemo, useState, useRef, useEffect, useCallback } from 'react'
+import { useMemo, useState, useRef, useEffect } from 'react'
 import { useApp } from '../../store/app-context'
 import { Card } from '../ui/Card'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
-import { FileDropZone } from '../upload/FileDropZone'
 import { canonGroup, isKoreanHistory } from '../../lib/normalization'
 import { buildChecks } from '../../lib/prerequisite-check'
 import { exportAllStudentSummary } from '../../lib/export'
 import { downloadStandaloneHtml } from '../../lib/standalone-export'
-import { readRowsFromSheet, XLSX } from '../../lib/xlsx-helpers'
 import type { Row, CurriculumCatalog } from '../../types'
 import { SimulationModal } from '../dashboard/SimulationModal'
 
@@ -50,18 +48,7 @@ function classLabel(klass: string | null) {
 
 export function Step3Dashboard() {
   const { state, dispatch, mergedRows, baseline } = useApp()
-  const [showDirectUpload, setShowDirectUpload] = useState(false)
   const [viewTab, setViewTab] = useState<'subject' | 'semester'>('subject')
-
-  const handleDirectUpload = useCallback(async (files: File[]) => {
-    const f = files[0]
-    if (!f) return
-    const buf = await f.arrayBuffer()
-    const wb = XLSX.read(buf)
-    const ws = wb.Sheets[wb.SheetNames[0]]
-    const rows = readRowsFromSheet(ws)
-    dispatch({ type: 'SET_OVERRIDE', rows })
-  }, [dispatch])
 
   /* ── student aggregation ── */
   const byStudent = useMemo(() => {
@@ -171,25 +158,15 @@ export function Step3Dashboard() {
   }, [byStudent])
 
   /* ── empty state ── */
-  if (!mergedRows.length && !showDirectUpload) {
+  if (!mergedRows.length) {
     return (
       <div className="max-w-xl mx-auto text-center py-20 space-y-5">
         <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-100 to-brand-200 flex items-center justify-center mx-auto">
           <svg className="w-8 h-8 text-brand-600" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5" /></svg>
         </div>
         <h2 className="text-xl font-bold text-slate-800">데이터가 없습니다</h2>
-        <p className="text-sm text-slate-500 leading-relaxed">Step 1에서 데이터를 업로드하거나,<br/>정리완료.xlsx 파일을 직접 업로드하세요.</p>
-        <div className="flex justify-center gap-3">
-          <Button variant="secondary" onClick={() => dispatch({ type: 'SET_STEP', step: 1 })}>Step 1으로 이동</Button>
-          <Button onClick={() => setShowDirectUpload(true)}>직접 업로드</Button>
-        </div>
-        {showDirectUpload && (
-          <div className="mt-4 max-w-md mx-auto">
-            <FileDropZone onFiles={handleDirectUpload} accept=".xlsx,.xls">
-              <div className="py-4 text-sm text-slate-500">정리완료.xlsx 파일을 드래그하세요</div>
-            </FileDropZone>
-          </div>
-        )}
+        <p className="text-sm text-slate-500 leading-relaxed">Step 1에서 데이터를 업로드하세요.</p>
+        <Button variant="secondary" onClick={() => dispatch({ type: 'SET_STEP', step: 1 })}>Step 1으로 이동</Button>
       </div>
     )
   }
@@ -203,15 +180,9 @@ export function Step3Dashboard() {
           <p className="text-sm text-slate-500 mt-0.5">학급과 학생을 선택하여 이수현황을 점검하세요.</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          {!state.isEmbedded && !state.overrideRows && (
-            <Button variant="ghost" size="sm" onClick={() => setShowDirectUpload(!showDirectUpload)}>직접 업로드</Button>
-          )}
-          {!state.isEmbedded && state.overrideRows && (
-            <Button variant="ghost" size="sm" onClick={() => dispatch({ type: 'CLEAR_OVERRIDE' })}>원본 데이터로 복원</Button>
-          )}
           <Button variant="secondary" size="sm" onClick={() => exportAllStudentSummary(mergedRows)}>
             <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
-            내보내기
+            xlsx로 저장
           </Button>
           {!state.isEmbedded && (
             <Button variant="secondary" size="sm" onClick={() => downloadStandaloneHtml(mergedRows)}>
@@ -221,14 +192,6 @@ export function Step3Dashboard() {
           )}
         </div>
       </div>
-
-      {showDirectUpload && (
-        <Card className="p-4">
-          <FileDropZone onFiles={handleDirectUpload} accept=".xlsx,.xls">
-            <div className="py-3 text-sm text-slate-500">정리완료.xlsx 파일을 드래그하거나 클릭하세요</div>
-          </FileDropZone>
-        </Card>
-      )}
 
       {/* ═══ Main Layout ═══ */}
       <div className="grid md:grid-cols-[280px_1fr] gap-5">
@@ -488,6 +451,8 @@ function StudentDetailPanel({
       {/* ── Simulation Modal ── */}
       {showSim && catalog && (
         <SimulationModal
+          key={selected}
+          storageKey={`${selected}:${studentDet.이름 ?? ''}`}
           catalog={catalog}
           completedCourses={studentDet.list.filter(r => !r.isFuture).map(r => ({
             과목명: r.과목명, 교과: r.교과, 학점: r.학점, 과목학년: r.과목학년, 과목학기: r.과목학기,
@@ -707,4 +672,3 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
     </button>
   )
 }
-
