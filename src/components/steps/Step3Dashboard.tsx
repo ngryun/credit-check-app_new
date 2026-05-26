@@ -219,8 +219,8 @@ export function Step3Dashboard() {
       {/* ═══ Main Layout ═══ */}
       <div className="grid md:grid-cols-[280px_1fr] gap-5">
         {/* ── Sidebar ── */}
-        <div className="space-y-4">
-          <Card className="p-0 overflow-hidden">
+        <div className={`space-y-4 ${klass ? 'md:sticky md:top-[88px] md:self-start' : ''}`}>
+          <Card className={`p-0 overflow-hidden ${klass ? 'md:flex md:h-[calc(100vh-112px)] md:flex-col' : ''}`}>
             <div className="px-4 pt-4 pb-3">
               <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">학급 선택</div>
               <select
@@ -234,7 +234,7 @@ export function Step3Dashboard() {
             </div>
 
             {klass && (
-              <div className="border-t border-slate-100">
+              <div className="border-t border-slate-100 md:flex md:min-h-0 md:flex-1 md:flex-col">
                 <div className="px-4 pt-3 pb-2">
                   <div className="relative">
                     <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
@@ -247,7 +247,7 @@ export function Step3Dashboard() {
                   </div>
                 </div>
                 <div
-                  className="max-h-[560px] overflow-auto"
+                  className="max-h-[70vh] overflow-auto md:min-h-0 md:flex-1 md:max-h-none"
                   onKeyDown={handleListKey}
                   tabIndex={0}
                   ref={listRef}

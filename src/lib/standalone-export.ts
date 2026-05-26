@@ -128,13 +128,18 @@ body{font-family:'Pretendard Variable',Pretendard,system-ui,-apple-system,sans-s
 .dash-sub{font-size:13px;color:#64748b}
 .layout{display:grid;grid-template-columns:280px 1fr;gap:20px;margin-top:20px}
 .card{background:white;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden}
+.sidebar-shell{position:sticky;top:88px;align-self:start}
+.sidebar-card:has(.student-panel:not([hidden])){height:calc(100vh - 112px);display:flex;flex-direction:column}
+.student-panel{border-top:1px solid #f1f5f9}
+.sidebar-card:has(.student-panel:not([hidden])) .student-panel{display:flex;flex-direction:column;min-height:0;flex:1}
 .sidebar-title{font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;padding:16px 16px 8px}
 select,input{width:100%;border-radius:12px;border:1px solid #e2e8f0;background:#f8fafc;padding:10px 12px;font-size:13px;outline:none;font-family:inherit;transition:box-shadow .15s}
 select:focus,input:focus{box-shadow:0 0 0 2px #818cf8;border-color:#818cf8}
 .search-wrap{padding:0 16px 12px;position:relative}
 .search-wrap svg{position:absolute;left:28px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:#94a3b8}
 .search-wrap input{padding-left:36px}
-.stu-list{max-height:560px;overflow:auto}
+.stu-list{max-height:70vh;overflow:auto}
+.sidebar-card:has(.student-panel:not([hidden])) .stu-list{flex:1;min-height:0;max-height:none}
 .stu-btn{width:100%;text-align:left;padding:10px 16px;font-size:13px;border:none;background:none;cursor:pointer;border-left:2px solid transparent;transition:all .15s;display:flex;align-items:center;justify-content:space-between;font-family:inherit;color:#334155}
 .stu-btn:hover{background:#f8fafc}
 .stu-btn.active{background:#eef2ff;border-left-color:#6366f1;color:#4338ca;font-weight:500}
@@ -199,7 +204,7 @@ tr:not(.future):hover{background:#f8fafc}
 .footer{border-top:1px solid #e2e8f0;background:white;margin-top:48px;padding:24px;text-align:center;font-size:11px;color:#94a3b8;line-height:1.8}
 .footer a{color:#64748b;text-decoration:underline;text-underline-offset:2px}
 .footer a:hover{color:#4f46e5}
-@media(max-width:768px){.layout{grid-template-columns:1fr}.subj-grid,.sem-grid{grid-template-columns:1fr}.kpi-row{grid-template-columns:1fr}}
+@media(max-width:768px){.layout{grid-template-columns:1fr}.sidebar-shell{position:static}.sidebar-card:has(.student-panel:not([hidden])){height:auto}.sidebar-card:has(.student-panel:not([hidden])) .stu-list{max-height:70vh}.subj-grid,.sem-grid{grid-template-columns:1fr}.kpi-row{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -216,11 +221,11 @@ tr:not(.future):hover{background:#f8fafc}
   <div class="dash-sub">학급과 학생을 선택하여 이수현황을 점검하세요.</div>
 
   <div class="layout">
-    <div>
-      <div class="card">
+    <div class="sidebar-shell">
+      <div class="card sidebar-card">
         <div class="sidebar-title">학급 선택</div>
         <div style="padding:0 16px 12px"><select id="classSelect"><option value="">학급을 선택하세요</option></select></div>
-        <div style="border-top:1px solid #f1f5f9" id="studentPanel" hidden>
+        <div class="student-panel" id="studentPanel" hidden>
           <div class="search-wrap" style="padding-top:12px">
             <svg fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
             <input id="searchInput" placeholder="이름 또는 번호 검색" />
