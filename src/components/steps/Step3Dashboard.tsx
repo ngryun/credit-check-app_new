@@ -32,10 +32,18 @@ const SEMESTERS = [
   { y: 3, t: 2, label: '3-2' },
 ]
 
+const ALL_CLASSES = '__ALL_CLASSES__'
+
 function semLabel(y: number | null, t: number | null) {
   if (y == null) return '미정'
   if (t == null) return `${y}학년`
   return `${y}-${t}`
+}
+
+function classLabel(klass: string | null) {
+  if (!klass) return ''
+  if (klass === ALL_CLASSES) return '전체 학급'
+  return klass.replace('-', '학년 ') + '반'
 }
 
 /* ─────────── main ─────────── */
@@ -88,6 +96,12 @@ export function Step3Dashboard() {
 
   const studentsInClass = useMemo(() => {
     if (!klass) return []
+    if (klass === ALL_CLASSES) {
+      return byStudent.list.map((s) => ({
+        key: s.key,
+        label: `${s.학년}학년 ${s.반}반 ${String(s.번호).padStart(2, '0')} ${s.이름 ?? ''}`,
+      }))
+    }
     const [g, c] = klass.split('-').map(Number)
     const m = new Map<string, string>()
     for (const r of mergedRows) {
@@ -97,7 +111,7 @@ export function Step3Dashboard() {
       }
     }
     return Array.from(m, ([key, label]) => ({ key, label })).sort((a, b) => a.label.localeCompare(b.label, 'ko'))
-  }, [mergedRows, klass])
+  }, [byStudent.list, mergedRows, klass])
 
   const filtered = studentsInClass.filter((s) => s.label.includes(query))
   const listRef = useRef<HTMLDivElement>(null)
@@ -229,6 +243,7 @@ export function Step3Dashboard() {
                 onChange={(e) => dispatch({ type: 'SET_CLASS', value: e.target.value || null })}
               >
                 <option value="">학급을 선택하세요</option>
+                <option value={ALL_CLASSES}>전체</option>
                 {classes.map((k) => <option key={k} value={k}>{k.replace('-', '학년 ') + '반'}</option>)}
               </select>
             </div>
@@ -371,7 +386,7 @@ function StudentDetailPanel({
         <div className="bg-gradient-to-r from-brand-600 via-brand-500 to-indigo-500 px-6 py-5 text-white">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-sm font-medium text-white/70 mb-0.5">{klass?.replace('-', '학년 ') + '반'}</div>
+              <div className="text-sm font-medium text-white/70 mb-0.5">{classLabel(klass)}</div>
               <div className="text-xl font-bold tracking-tight">{studentLabel}</div>
             </div>
             <div>

@@ -248,6 +248,7 @@ tr:not(.future):hover{background:#f8fafc}
 const DATA = ${dataJson};
 const classes = DATA.classes;
 const students = DATA.students;
+const ALL_CLASSES = '__ALL_CLASSES__';
 let currentClass = '';
 let currentStudent = '';
 let viewTab = 'subject';
@@ -263,6 +264,10 @@ classes.forEach(c => {
   o.value = c; o.textContent = c.replace('-', '학년 ') + '반';
   classSelect.appendChild(o);
 });
+const allOption = document.createElement('option');
+allOption.value = ALL_CLASSES;
+allOption.textContent = '전체';
+classSelect.insertBefore(allOption, classSelect.children[1] || null);
 
 classSelect.addEventListener('change', () => {
   currentClass = classSelect.value;
@@ -277,18 +282,23 @@ searchInput.addEventListener('input', renderStudentList);
 
 function renderStudentList() {
   const q = searchInput.value;
-  const list = students.filter(s => s.className === currentClass && s.label.includes(q));
+  const list = students.filter(s => {
+    if (currentClass && currentClass !== ALL_CLASSES && s.className !== currentClass) return false;
+    return displayStudentLabel(s).includes(q);
+  });
   stuList.innerHTML = '';
   list.forEach(s => {
     const btn = document.createElement('button');
     btn.className = 'stu-btn' + (s.key === currentStudent ? ' active' : '');
-    btn.innerHTML = '<span>' + esc(s.label) + '</span>' + (s.hasViolation ? '<span class="dot dot-red"></span>' : '');
+    btn.innerHTML = '<span>' + esc(displayStudentLabel(s)) + '</span>' + (s.hasViolation ? '<span class="dot dot-red"></span>' : '');
     btn.onclick = () => { currentStudent = s.key; renderStudentList(); renderDetail(); };
     stuList.appendChild(btn);
   });
   if (!list.length) stuList.innerHTML = '<div class="empty">검색 결과 없음</div>';
 }
 
+function classLabel(c) { return c === ALL_CLASSES ? '전체 학급' : c.replace('-', '학년 ') + '반'; }
+function displayStudentLabel(s) { return currentClass === ALL_CLASSES ? classLabel(s.className) + ' ' + s.label : s.label; }
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
 function renderDetail() {
@@ -351,7 +361,7 @@ function renderDetail() {
 
   detail.innerHTML = '<div class="card" style="margin-bottom:16px">' +
     '<div class="stu-header"><div style="display:flex;justify-content:space-between;align-items:center">' +
-    '<div><div class="stu-class">' + esc(currentClass.replace('-', '학년 ') + '반') + '</div><div class="stu-name">' + esc(s.label) + '</div></div>' + statusHtml + '</div></div>' +
+    '<div><div class="stu-class">' + esc(classLabel(currentClass)) + '</div><div class="stu-name">' + esc(displayStudentLabel(s)) + '</div></div>' + statusHtml + '</div></div>' +
     '<div class="kpi-row"><div><div class="kpi-label">전체 이수학점</div><div class="kpi-value" style="color:#0f172a">' + s.totalCredits + '</div>' +
     '<div class="kpi-sub"><span class="kpi-dot"><span style="background:#6366f1"></span> 이수 ' + s.completedCredits + '</span>' +
     (s.futureCredits > 0 ? '<span class="kpi-dot"><span style="background:#fbbf24"></span> 예정 ' + s.futureCredits + '</span>' : '') + '</div></div>' +

@@ -69,9 +69,31 @@ export function Step2Review() {
       </Card>
 
       {/* 미래선택 리포트 */}
-      {stats && (Object.keys(stats.notInCatalog).length > 0 || Object.keys(stats.noFutureOffering).length > 0) && (
+      {stats && (
+        Object.keys(stats.notInCatalog).length > 0 ||
+        Object.keys(stats.noFutureOffering).length > 0 ||
+        Object.keys(stats.ambiguousOfferings).length > 0
+      ) && (
         <Card className="p-4 space-y-3">
           <div className="text-sm font-semibold text-slate-700">미래 과목선택 리포트</div>
+          {Object.keys(stats.ambiguousOfferings).length > 0 && (
+            <div>
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
+                구버전 과목선택 양식에서 학기를 판단하기 어려운 과목이 있습니다. 해당 과목 열의 1행에 <span className="font-mono font-semibold">2-2</span>처럼 학년-학기를 입력하면 정확히 인식합니다.
+              </div>
+              <div className="text-xs text-slate-500 mt-3 mb-1">학기 확인 필요 (상위 20)</div>
+              <div className="max-h-40 overflow-auto">
+                <table className="w-full text-sm">
+                  <thead><tr><th className="text-left p-1 text-slate-500">과목명/후보 학기</th><th className="text-right p-1 text-slate-500">건수</th></tr></thead>
+                  <tbody>
+                    {Object.entries(stats.ambiguousOfferings).sort((a, b) => b[1] - a[1]).slice(0, 20).map(([k, v]) => (
+                      <tr key={k}><td className="p-1">{k}</td><td className="p-1 text-right font-mono">{v}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
           {Object.keys(stats.notInCatalog).length > 0 && (
             <div>
               <div className="text-xs text-slate-500 mb-1">DB에 과목명이 없음 (상위 20)</div>

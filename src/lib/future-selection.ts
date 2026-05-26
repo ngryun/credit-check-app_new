@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx'
 import type { Row, CurriculumCatalog, FutureStats } from '../types'
-import { toNum } from './normalization'
+import { toNum, toStr } from './normalization'
 import { loadWorkbookFromBufferOrText } from './xlsx-helpers'
 import { parseYearTermFromText } from './curriculum-catalog'
 
@@ -16,6 +16,30 @@ function compareYearTerm(aY: number | null, aT: number | null, bY: number | null
 function keyForName(g: number | null, c: number | null, n: number | null): string | null {
   if (g == null || c == null || n == null) return null
   return `${g}-${c}-${n}`
+}
+
+function emptyFutureStats(): FutureStats {
+  return {
+    skippedNoId: 0,
+    skippedNoCourse: 0,
+    produced: 0,
+    requiredAdded: 0,
+    notInCatalog: {},
+    noFutureOffering: {},
+    ambiguousOfferings: {},
+  }
+}
+
+function inc(map: Map<string, number>, key: string) {
+  map.set(key, (map.get(key) || 0) + 1)
+}
+
+function isSelectedMark(v: unknown): boolean {
+  return v === 1 || String(v ?? '').trim() === '1'
+}
+
+function isLegacyFutureFormat(aoa: unknown[][]): boolean {
+  return String(aoa[1]?.[0] ?? '').trim().replace(/\s+/g, '') === '회원코드'
 }
 
 function isCourseTitleLike(s: string | null): boolean {
@@ -103,6 +127,15 @@ function parseStudentId(id: unknown): { g: number; c: number; n: number } | null
   return { g: Number(s[0]), c: Number(s.slice(1, 3)), n: Number(s.slice(3, 5)) }
 }
 
+function parseLegacyStudentId(row: unknown[]): { g: number; c: number; n: number } | null {
+  const g = toNum(row[1])
+  const c = toNum(row[2])
+  const n = toNum(row[3])
+  if (g == null || c == null || n == null) return null
+  if (g <= 0 || c <= 0 || n <= 0) return null
+  return { g, c, n }
+}
+
 export async function parseFutureSelectionFile(
   buffer: ArrayBuffer,
   fileName: string,
@@ -114,15 +147,9 @@ export async function parseFutureSelectionFile(
   const wsName = wb.SheetNames[0]
   const ws = wb.Sheets[wsName]
   const aoa = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: null }) as unknown[][]
-  if (!aoa.length) return { rows: [], stats: { skippedNoId: 0, skippedNoCourse: 0, produced: 0, requiredAdded: 0, notInCatalog: {}, noFutureOffering: {} } }
+  if (!aoa.length) return { rows: [], stats: emptyFutureStats() }
 
-  const { termMap: termByCol, rowIndex: termRowIdx } = detectTermByColumn(aoa)
-  let start = 0
-  for (let r = 0; r < aoa.length; r++) {
-    const arr = (aoa[r] || []) as unknown[]
-    const hasId = (/^\d{5}$/.test(String(arr[0] || '')) || /^\d{5}$/.test(String(arr[1] || '')) || /^\d{5}$/.test(String(arr[2] || '')))
-    if (hasId) { start = r; break }
-  }
+  const legacyFormat = isLegacyFutureFormat(aoa)
 
   const resolveName = (g: number, c: number, n: number) => {
     const k = keyForName(g, c, n)
@@ -141,6 +168,7 @@ export async function parseFutureSelectionFile(
   let requiredAdded = 0
   const notInCatalog = new Map<string, number>()
   const noFutureOffering = new Map<string, number>()
+  const ambiguousOfferings = new Map<string, number>()
   const seen = new Set<string>()
   const studentSet = new Map<string, { g: number; c: number; n: number }>()
 
@@ -153,69 +181,122 @@ export async function parseFutureSelectionFile(
     addStudent(g, c, n)
   }
 
-  let courseCols: Map<number, string> | null = null
+  const addFutureCourse = (
+    g: number,
+    c: number,
+    n: number,
+    이름: string | null,
+    subName: string,
+    o: typeof catalog[string][number]
+  ) => {
+    const k = `${g}-${c}-${n}::${subName}::${o.과목학년 ?? ''}-${o.과목학기 ?? ''}`
+    if (seen.has(k)) return
+    seen.add(k)
+    out.push({ 학년: g, 반: c, 번호: n, 이름: 이름 ?? null, 과목학년: o.과목학년 ?? null, 과목학기: o.과목학기 ?? null, 교과: o.교과 ?? null, 과목명: subName, 학점: o.학점 ?? null, _source: 'future' })
+    produced++
+  }
 
-  for (let r = start; r < aoa.length; r++) {
-    const arr = (aoa[r] || []) as unknown[]
-    const id3 = parseStudentId(arr[2])
-    const id2 = parseStudentId(arr[1])
-    const id1 = parseStudentId(arr[0])
-    const cur = id3 || id2 || id1
-    if (!cur) { skippedNoId++; continue }
-    const { g, c, n } = cur
-    addStudent(g, c, n)
-    const 이름 = resolveName(g, c, n)
-    const base = getBaselineFor(g, c, n)
-
-    if (r === start) {
-      courseCols = findCourseColumns(aoa, termRowIdx, start)
-      if (catalog) {
-        const filtered = new Map<number, string>()
-        for (const [ci, name] of courseCols) { if (catalog[name]) filtered.set(ci, name) }
-        courseCols = filtered
-      }
-    }
-
-    for (const [ci, subName] of courseCols!) {
-      const v = arr[ci]
-      if (!(v === 1 || v === '1')) continue
+  const addSelectedCourse = (
+    g: number,
+    c: number,
+    n: number,
+    이름: string | null,
+    base: { y: number | null; t: number | null },
+    subName: string,
+    explicitTerm: { y: number | null; t: number | null } | null,
+    requireSingleFutureOffering: boolean
+  ) => {
       const list = catalog[subName]
       if (!list) {
         skippedNoCourse++
-        notInCatalog.set(subName, (notInCatalog.get(subName) || 0) + 1)
-        continue
+        inc(notInCatalog, subName)
+        return
       }
-      const headerTerm = termByCol.get(ci) || null
-      if (headerTerm && compareYearTerm(headerTerm.y, headerTerm.t, base.y, base.t) > 0) {
-        const o = list.find((o) => o.과목학년 === headerTerm.y && o.과목학기 === headerTerm.t)
+      if (explicitTerm && explicitTerm.y != null && explicitTerm.t != null && compareYearTerm(explicitTerm.y, explicitTerm.t, base.y, base.t) > 0) {
+        const o = list.find((o) => o.과목학년 === explicitTerm.y && o.과목학기 === explicitTerm.t)
         if (!o) {
           skippedNoCourse++
-          const key = `${subName}(${headerTerm.y}-${headerTerm.t})`
-          noFutureOffering.set(key, (noFutureOffering.get(key) || 0) + 1)
-          continue
+          inc(noFutureOffering, `${subName}(${explicitTerm.y}-${explicitTerm.t})`)
+          return
         }
-        const k = `${g}-${c}-${n}::${subName}::${o.과목학년 ?? ''}-${o.과목학기 ?? ''}`
-        if (!seen.has(k)) {
-          seen.add(k)
-          out.push({ 학년: g, 반: c, 번호: n, 이름: 이름 ?? null, 과목학년: o.과목학년 ?? null, 과목학기: o.과목학기 ?? null, 교과: o.교과 ?? null, 과목명: subName, 학점: o.학점 ?? null, _source: 'future' })
-          produced++
-        }
-        continue
+        addFutureCourse(g, c, n, 이름, subName, o)
+        return
       }
       const offerings = list
         .filter((o) => o.과목학년 != null && compareYearTerm(o.과목학년, o.과목학기, base.y, base.t) > 0)
         .sort((a, b) => compareYearTerm(a.과목학년, a.과목학기, b.과목학년, b.과목학기))
       if (!offerings.length) {
         skippedNoCourse++
-        noFutureOffering.set(subName, (noFutureOffering.get(subName) || 0) + 1)
-        continue
+        inc(noFutureOffering, subName)
+        return
+      }
+      if (requireSingleFutureOffering && offerings.length > 1) {
+        skippedNoCourse++
+        const options = offerings.map((o) => `${o.과목학년}-${o.과목학기 ?? ''}`).join(', ')
+        inc(ambiguousOfferings, `${subName} (${options})`)
+        return
       }
       const o = offerings[0]
-      const k = `${g}-${c}-${n}::${subName}::${o.과목학년 ?? ''}-${o.과목학기 ?? ''}`
-      if (!seen.has(k)) {
-        seen.add(k)
-        out.push({ 학년: g, 반: c, 번호: n, 이름: 이름 ?? null, 과목학년: o.과목학년 ?? null, 과목학기: o.과목학기 ?? null, 교과: o.교과 ?? null, 과목명: subName, 학점: o.학점 ?? null, _source: 'future' })
-        produced++
+      addFutureCourse(g, c, n, 이름, subName, o)
+  }
+
+  if (legacyFormat) {
+    const header = (aoa[1] || []) as unknown[]
+    const termRow = (aoa[0] || []) as unknown[]
+    const courseCols = new Map<number, string>()
+    const maxC = Math.max(...aoa.map((r) => (r as unknown[])?.length || 0))
+    for (let c = 6; c < maxC; c++) {
+      const subName = toStr(header[c])
+      if (subName) courseCols.set(c, subName)
+    }
+
+    for (let r = 2; r < aoa.length; r++) {
+      const arr = (aoa[r] || []) as unknown[]
+      const cur = parseLegacyStudentId(arr)
+      if (!cur) { skippedNoId++; continue }
+      const { g, c, n } = cur
+      addStudent(g, c, n)
+      const 이름 = toStr(arr[5]) ?? resolveName(g, c, n)
+      const base = getBaselineFor(g, c, n)
+
+      for (const [ci, subName] of courseCols) {
+        if (!isSelectedMark(arr[ci])) continue
+        const explicitTerm = parseYearTermFromText(termRow[ci])
+        addSelectedCourse(g, c, n, 이름, base, subName, explicitTerm, true)
+      }
+    }
+  } else {
+    const { termMap: termByCol, rowIndex: termRowIdx } = detectTermByColumn(aoa)
+    let start = 0
+    for (let r = 0; r < aoa.length; r++) {
+      const arr = (aoa[r] || []) as unknown[]
+      const hasId = (/^\d{5}$/.test(String(arr[0] || '')) || /^\d{5}$/.test(String(arr[1] || '')) || /^\d{5}$/.test(String(arr[2] || '')))
+      if (hasId) { start = r; break }
+    }
+
+    let courseCols: Map<number, string> | null = null
+
+    for (let r = start; r < aoa.length; r++) {
+      const arr = (aoa[r] || []) as unknown[]
+      const id3 = parseStudentId(arr[2])
+      const id2 = parseStudentId(arr[1])
+      const id1 = parseStudentId(arr[0])
+      const cur = id3 || id2 || id1
+      if (!cur) { skippedNoId++; continue }
+      const { g, c, n } = cur
+      addStudent(g, c, n)
+      const 이름 = resolveName(g, c, n)
+      const base = getBaselineFor(g, c, n)
+
+      if (r === start) {
+        courseCols = findCourseColumns(aoa, termRowIdx, start)
+      }
+
+      for (const [ci, subName] of courseCols!) {
+        if (!isSelectedMark(arr[ci])) continue
+        const headerTerm = termByCol.get(ci) || null
+        const explicitTerm = headerTerm && compareYearTerm(headerTerm.y, headerTerm.t, base.y, base.t) > 0 ? headerTerm : null
+        addSelectedCourse(g, c, n, 이름, base, subName, explicitTerm, false)
       }
     }
   }
@@ -251,6 +332,7 @@ export async function parseFutureSelectionFile(
       requiredAdded,
       notInCatalog: Object.fromEntries(notInCatalog),
       noFutureOffering: Object.fromEntries(noFutureOffering),
+      ambiguousOfferings: Object.fromEntries(ambiguousOfferings),
     },
   }
 }

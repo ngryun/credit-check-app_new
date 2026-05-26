@@ -49,6 +49,7 @@ export type FutureStats = {
   requiredAdded: number
   notInCatalog: Record<string, number>
   noFutureOffering: Record<string, number>
+  ambiguousOfferings: Record<string, number>
 }
 
 export type StepId = 1 | 2 | 3
