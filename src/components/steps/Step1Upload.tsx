@@ -6,8 +6,54 @@ import { parseGradebookFilesAsync } from '../../lib/gradebook-parser'
 import { parseClasslistFile } from '../../lib/classlist-parser'
 import { parseCurriculumFile } from '../../lib/curriculum-catalog'
 import { parseFutureSelectionFile } from '../../lib/future-selection'
+import type { FutureStats, Row } from '../../types'
 
 type FileStatus = 'idle' | 'loading' | 'done' | 'error'
+
+function mergeCountMap(target: Record<string, number>, source: Record<string, number>) {
+  for (const [key, count] of Object.entries(source)) {
+    target[key] = (target[key] || 0) + count
+  }
+}
+
+function mergeFutureStats(results: { stats: FutureStats }[], produced: number): FutureStats {
+  const merged: FutureStats = {
+    skippedNoId: 0,
+    skippedNoCourse: 0,
+    produced,
+    requiredAdded: 0,
+    notInCatalog: {},
+    noFutureOffering: {},
+    ambiguousOfferings: {},
+  }
+
+  for (const { stats } of results) {
+    merged.skippedNoId += stats.skippedNoId
+    merged.skippedNoCourse += stats.skippedNoCourse
+    merged.requiredAdded += stats.requiredAdded
+    mergeCountMap(merged.notInCatalog, stats.notInCatalog)
+    mergeCountMap(merged.noFutureOffering, stats.noFutureOffering)
+    mergeCountMap(merged.ambiguousOfferings, stats.ambiguousOfferings)
+  }
+
+  return merged
+}
+
+function dedupeFutureRows(rows: Row[]): Row[] {
+  const map = new Map<string, Row>()
+  for (const row of rows) {
+    const key = [
+      row.학년 ?? '',
+      row.반 ?? '',
+      row.번호 ?? '',
+      row.과목학년 ?? '',
+      row.과목학기 ?? '',
+      row.과목명 ?? '',
+    ].join('::')
+    if (!map.has(key)) map.set(key, row)
+  }
+  return Array.from(map.values())
+}
 
 export function Step1Upload() {
   const { state, dispatch, nameIndex, baseline } = useApp()
@@ -72,12 +118,15 @@ export function Step1Upload() {
     }
     setFutStatus('loading')
     try {
-      const f = files[0]
-      const buf = await f.arrayBuffer()
-      const result = await parseFutureSelectionFile(buf, f.name, state.curriculumCatalog, nameIndex, baseline)
-      dispatch({ type: 'SET_FUTURE', rows: result.rows, stats: result.stats })
+      const results = await Promise.all(files.map(async (f) => {
+        const buf = await f.arrayBuffer()
+        return parseFutureSelectionFile(buf, f.name, state.curriculumCatalog!, nameIndex, baseline)
+      }))
+      const rows = dedupeFutureRows(results.flatMap((result) => result.rows))
+      const stats = mergeFutureStats(results, rows.length)
+      dispatch({ type: 'SET_FUTURE', rows, stats })
       setFutStatus('done')
-      setFutText(`${result.rows.length}행`)
+      setFutText(files.length > 1 ? `${rows.length}행 / ${files.length}파일` : `${rows.length}행`)
     } catch (e) {
       setFutStatus('error')
       setFutText(String(e instanceof Error ? e.message : e))
@@ -134,12 +183,13 @@ export function Step1Upload() {
         hint={
           !state.curriculumCatalog
             ? <span className="text-amber-600">교육과정 DB를 먼저 업로드해야 합니다.</span>
-            : '예: 2025입학생_수강신청일괄등록20250922.xlsx (값=1은 선택)'
+            : '예: 2025입학생_수강신청일괄등록20250922.xlsx (값=1은 선택, 복수 파일 업로드 가능)'
         }
         status={futStatus}
         statusText={futText}
         accept=".xlsx,.xls"
         optional
+        multiple
         onFiles={handleFuture}
       />
 
